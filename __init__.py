@@ -91,20 +91,19 @@ class Window():
             extra = 0;
 
         #Calculate the shadow position
-#        leftbase = (dest[0]+11,dest[1]+source.height);
-#        rightbase = (dest[0]+source.width-11,dest[1]+source.height);
-        leftbase = (dest[0],dest[1]+source.height);
-        rightbase = (dest[0]+source.width,dest[1]+source.height);
+        basepoint1,basepoint2 = get_basepoints(light_location,source,dest);
+        topleft = distance_to_coord_via_point(light_location,100,basepoint1);
+        topright = distance_to_coord_via_point(light_location,100,basepoint2);        
 
-        topleft = distance_to_coord_via_point(light_location,100,leftbase);
-        topright = distance_to_coord_via_point(light_location,100,rightbase);        
-
+        #Translate to OpenGL coords
         dest = self.translate_coords(dest,extra);
+        basepoint1 = self.translate_coords(basepoint1);
+        basepoint2 = self.translate_coords(basepoint2);
         topleft = self.translate_coords(topleft);
         topright = self.translate_coords(topright);
 
         #Draw the shadow
-        source.draw_shadow(topleft,topright,dest);
+        source.draw_shadow(basepoint1,basepoint2,topleft,topright,dest);
 
     def translate_coords(self,coords,extra = 0):
 
@@ -251,7 +250,7 @@ class Window():
 
 class Texture():
 
-    def __init__(self,source,colorkey=None,width=None,height=None,):
+    def __init__(self,source,colorkey=None,width=None,height=None,base=None):
 
         #Load the image via a pygame Surface
         if isinstance(source,str):
@@ -270,6 +269,11 @@ class Texture():
             self.height = height;
         else:
             self.height = current_surface.get_height();
+
+        if base == None:
+            self.base = None;
+        else:
+            self.base = p.Rect(*base);
 
         #Transform to texture
         if colorkey != None:
@@ -346,10 +350,10 @@ class Texture():
         #Draw the displaylist
         glCallList(self.list);
 
-    def draw_shadow(self,topleft,topright,dest):
+    def draw_shadow(self,basepoint1,basepoint2,topleft,topright,dest):
 
         #Reset the color
-        glColor4fv((0,0,0,0.8));
+        glColor4fv((0,0,0,0.6));
 
         #Reset the position
         glLoadIdentity();
@@ -360,7 +364,7 @@ class Texture():
         #Put the texture on a qaudrangle        
         self.bind();
         glBegin(GL_QUADS);        
-        glTexCoord2f(0, 0); glVertex2f(dest[0], dest[1]);    # Bottom Left Of The Texture and Quad
+        glTexCoord2f(0, 0); glVertex2f(*basepoint1);    # Bottom Left Of The Texture and Quad
 
 #        glColor4fv((0,0,0,0)); #Make shadow fade away
 
@@ -369,7 +373,7 @@ class Texture():
 
         glColor4fv((0,0,0,1));
 
-        glTexCoord2f(1, 0); glVertex2f(dest[0]+self.width, dest[1]);    # Bottom Right Of The Texture and Quad
+        glTexCoord2f(1, 0); glVertex2f(*basepoint2);    # Bottom Right Of The Texture and Quad
         glEnd();
 
     def __del__(self):        
@@ -645,6 +649,61 @@ def create_transparent_texture(width,height):
 
 def translate_color(r,g,b,a):
     return (r/255,g/255,b/255,a/255);
+
+def get_basepoints(light_location,source,dest):
+
+    if source.base == None:
+        basepoint1 = (dest[0],dest[1]+source.height);
+        basepoint2 = (dest[0]+source.width,dest[1]+source.height);
+    else:
+
+        if light_location[0] < dest[0] + source.base.left:
+            hor = 'left';
+        elif light_location[0] > dest[0]  + source.base.left \
+             and light_location[0] < dest[0] + source.base.right:
+            hor = 'mid';
+        else:
+            hor = 'right';
+
+        if light_location[1] < dest[1] + source.base.top:
+            ver = 'top';
+        elif light_location[1] > dest[1]  + source.base.top \
+             and light_location[1] < dest[1] + source.base.bottom:
+            ver = 'mid';
+        else:
+            ver = 'bot';
+
+        if hor == 'left' and ver == 'top':
+            basepoint1 = (dest[0]+source.base.right,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+        elif hor == 'mid' and ver == 'top':
+            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.top);
+        elif hor == 'right' and ver == 'top':
+            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+
+        elif hor == 'left' and ver == 'mid':
+            basepoint2 = (dest[0]+source.base.left,dest[1]+source.base.top);
+            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+        elif hor == 'mid' and ver == 'mid':
+            basepoint1 = (dest[0],dest[1]+source.height);
+            basepoint2 = (dest[0]+source.width,dest[1]+source.height);           
+        elif hor == 'right' and ver == 'mid':
+            basepoint1 = (dest[0]+source.base.right,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+
+        elif hor == 'left' and ver == 'bot':
+            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+        elif hor == 'mid' and ver == 'bot':
+            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+        elif hor == 'right' and ver == 'bot':
+            basepoint1 = (dest[0]+source.base.right,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+  
+    return basepoint1, basepoint2
 
 class LightNotRenderedError(Exception):
     pass;
