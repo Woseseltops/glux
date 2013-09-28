@@ -50,6 +50,7 @@ class Window():
         #Prepare lighting
         self.light = None;
         self.lit_up_textures = None;
+        self.inside = False;
 
     def close(self):
         p.display.quit();
@@ -68,7 +69,7 @@ class Window():
     def draw(self,source,dest1, dest2=None): 
 
         #pygame to opengl coordinates
-        if source.__class__ in [Texture,Layer]:
+        if is_texturelike(source):
             extra = source.height;
         else:
             extra = 0;
@@ -85,15 +86,20 @@ class Window():
     def draw_shadow(self, light, light_location, source, dest):
 
         #pygame to opengl coordinates
-        if source.__class__ in [Texture,Layer]:
+        if is_texturelike(source):
             extra = source.height;
         else:
             extra = 0;
 
         #Calculate the shadow position
+        if self.inside:
+            length = source.height * 10;
+        else:
+            length = source.height * 3;
+            
         basepoint1,basepoint2 = get_basepoints(light_location,source,dest);
-        topleft = distance_to_coord_via_point(light_location,100,basepoint1);
-        topright = distance_to_coord_via_point(light_location,100,basepoint2);        
+        topleft = distance_to_coord_via_point(light_location,length,basepoint1);
+        topright = distance_to_coord_via_point(light_location,length,basepoint2);        
 
         #Translate to OpenGL coords
         dest = self.translate_coords(dest,extra);
@@ -103,7 +109,7 @@ class Window():
         topright = self.translate_coords(topright);
 
         #Draw the shadow
-        source.draw_shadow(basepoint1,basepoint2,topleft,topright,dest);
+        source.draw_shadow(basepoint1,basepoint2,topleft,topright,dest,self.inside);
 
     def translate_coords(self,coords,extra = 0):
 
@@ -173,7 +179,10 @@ class Window():
         elif new_mode == 'screen':
             glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR)            
             
-    def build_lighting(self,environment_color,lights,shadowcasters):
+    def build_lighting(self,environment_color,lights,shadowcasters,glowers):
+
+        #Translate the color
+        environment_color = translate_color(*environment_color);
 
         #First check if any lights need to be rerendered
         rerender_needed = False;
@@ -213,20 +222,23 @@ class Window():
             l[0].draw((0,0),'light_only');
 
         self.change_blendmode('alpha');
+
+        for glower, pos in glowers: #Draw all glowers on it
+            self.draw(glower,pos);
+
         self.change_rendermode('window');
 
         light_only = self.render_texture;
 
         #Create a special texture for all shadowcasters
-        transtex = create_transparent_texture(self.width,self.height);
+        transtex = create_transparent_texture(self.width,self.height); #Start with empty tex
         self.change_rendermode('texture',transtex);
         
-        for shadowcaster, pos in shadowcasters:
+        for shadowcaster, pos in shadowcasters: #Draw all shadowcasters on it
             self.draw(shadowcaster,pos);
 
-        #Light up the shadowcasters and save the texture
         self.change_blendmode('multiply');
-        self.draw(light_only,(0,0));
+        self.draw(light_only,(0,0)); #Draw all lights on that
         self.change_blendmode('alpha');
 
         self.change_rendermode('window');
@@ -243,23 +255,25 @@ class Window():
             self.change_blendmode('alpha');
 
             #Draw the lit up shadowcaster on top of that
-            # (otherwhise the shadows would be on top of them)
             self.draw(self.lit_up_textures,(0,0));
         else:
             raise LightNotRenderedError;
 
 class Texture():
 
-    def __init__(self,source,colorkey=None,width=None,height=None,base=None):
+    def __init__(self,source,colorkey=None,width=None,height=None,base=None,square_shadow=False):
 
         #Load the image via a pygame Surface
         if isinstance(source,str):
-            current_surface = p.image.load(source);
+            current_surface = p.image.load(source).convert();
         elif isinstance(source,p.Surface) or isinstance(source,bytes):
             current_surface = source;
         elif source == None:
             current_surface = None;
 
+        #Save some properties
+        self.square_shadow = square_shadow
+            
         if width != None:
             self.width = width;
         else:
@@ -350,10 +364,27 @@ class Texture():
         #Draw the displaylist
         glCallList(self.list);
 
-    def draw_shadow(self,basepoint1,basepoint2,topleft,topright,dest):
+    def save(self,filename):
+
+        #Save glux.Texture to pygame.Surface
+        self.bind();
+        pixels = glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE);
+        surface = p.image.fromstring(pixels, (self.width, self.height), "RGBA")
+
+        #Undo the accidental mirroring and rotating
+        surface = p.transform.rotate(surface,180);
+        surface = p.transform.flip(surface,True,False);
+
+        #Save        
+        p.image.save(surface, filename)
+        
+    def draw_shadow(self,basepoint1,basepoint2,topleft,topright,dest,inside):
 
         #Reset the color
-        glColor4fv((0,0,0,0.6));
+        if inside:
+            glColor4fv((0,0,0,1));
+        else:
+            glColor4fv((0,0,0,0.6));
 
         #Reset the position
         glLoadIdentity();
@@ -362,18 +393,28 @@ class Texture():
 #        glTranslate(dest[0],dest[1],0);
 
         #Put the texture on a qaudrangle        
-        self.bind();
-        glBegin(GL_QUADS);        
-        glTexCoord2f(0, 0); glVertex2f(*basepoint1);    # Bottom Left Of The Texture and Quad
+        if self.square_shadow:
+            glBegin(GL_QUADS);        
+            glVertex2f(*basepoint1);
+            glVertex2f(*topleft);
+            glVertex2f(*topright);
+            glVertex2f(*basepoint2);
+        else:
+            self.bind();
+            glBegin(GL_QUADS);        
+            glTexCoord2f(0, 0); glVertex2f(*basepoint1);    # Bottom Left Of The Texture and Quad
 
-#        glColor4fv((0,0,0,0)); #Make shadow fade away
+            if not inside:
+                glColor4fv((0,0,0,0)); #Make shadow fade away
 
-        glTexCoord2f(0, 1); glVertex2f(*topleft);    # Top Left Of The Texture and Quad
-        glTexCoord2f(1, 1); glVertex2f(*topright);    # Top Right Of The Texture and Quad
+            glTexCoord2f(0, 1); glVertex2f(*topleft);    # Top Left Of The Texture and Quad
+            glTexCoord2f(1, 1); glVertex2f(*topright);    # Top Right Of The Texture and Quad
 
-        glColor4fv((0,0,0,1));
+            if not inside:
+                glColor4fv((0,0,0,1));
 
-        glTexCoord2f(1, 0); glVertex2f(*basepoint2);    # Bottom Right Of The Texture and Quad
+            glTexCoord2f(1, 0); glVertex2f(*basepoint2);    # Bottom Right Of The Texture and Quad
+
         glEnd();
 
     def __del__(self):        
@@ -458,7 +499,7 @@ class Text(Texture):
         #Text to surface
         current_surface = font.render(text, True, color)
 
-        #Calculate text width and texture width (must be dividable by 16)
+        #Calculate text width and texture width
         self.width = current_surface.get_width();
         self.height = current_surface.get_height();
 
@@ -468,21 +509,53 @@ class Text(Texture):
         #Transform to displaylist
         self.texture_to_displaylist();
 
+class Glower(Texture):
+
+    def __init__(self,source,color=None,colorkey=None):
+
+        #Load the image via a pygame Surface
+        if isinstance(source,str):
+            current_surface = p.image.load(source);
+        elif isinstance(source,p.Surface) or isinstance(source,bytes):
+            current_surface = source;
+        elif source == None:
+            current_surface = None;
+
+        #Set some properties
+        self.width = current_surface.get_width();
+        self.height = current_surface.get_height();
+
+        if color == None:
+            color = (255,255,255,255);
+
+        #Recolor in the glowing color
+        current_surface.fill(color);
+
+        #Transform to texture
+        if colorkey != None:
+            current_surface.set_colorkey(colorkey);
+        self._surface_to_texture(current_surface);
+
+        #Transform to displaylist
+        self.texture_to_displaylist();
+
 class Disk():
 
-    def __init__(self,size,color1,color2=None):
+    def __init__(self,size,color1,color2=None,parts=25):
 
         self.size = size;
         
         self.height = size; #This actually half the height
         self.width = size; #This is actually half the width
         
-        self.color1 = color1;
+        self.color1 = translate_color(*color1);
 
         if color2 == None:
-            self.color2 = color1;
+            self.color2 = translate_color(*color1);
         else:
-            self.color2 = color2;
+            self.color2 = translate_color(*color2);
+
+        self.parts = parts;
 
     def draw(self,pos):
         
@@ -501,10 +574,9 @@ class Disk():
         #Then the vertices around the center
         glColor4fv(self.color2);
 
-        parts = 25;
-        degrees_per_part = 360 / parts;
+        degrees_per_part = 360 / self.parts;
 
-        for i in range(parts+1):
+        for i in range(self.parts+1):
             #Use some math to determine their location
             degrees = degrees_per_part * i;
             loc = angle_to_loc((basex,basey),degrees,self.size);
@@ -525,7 +597,7 @@ class Line():
         #Reset the position
         glLoadIdentity()    
 
-        glColor4f(*self.color); 
+        glColor4fv(self.color); 
         glLineWidth(self.size); 
 
         glBegin(GL_LINES);
@@ -535,10 +607,12 @@ class Line():
 
 class Light():
 
-    def __init__(self,color,strength):
+    def __init__(self,color,strength,shadows):
 
         self.color = color;
         self.strength = strength;
+        self.shadows = shadows;
+        
         self.disk = Disk(strength,color,(0,0,0,0));
 #        self.disk = Disk(strength,color,color);
         self.tex = None;
@@ -567,8 +641,9 @@ class Light():
         window.fill(environment_color);
         window.draw(self.disk,pos);
 
-        for caster,casterpos in shadowcasters:
-            window.draw_shadow(self,pos,caster,casterpos);
+        if self.shadows:
+            for caster,casterpos in shadowcasters:
+                window.draw_shadow(self,pos,caster,casterpos);
 
         window.change_rendermode('window');
 
@@ -657,10 +732,20 @@ def get_basepoints(light_location,source,dest):
         basepoint2 = (dest[0]+source.width,dest[1]+source.height);
     else:
 
-        if light_location[0] < dest[0] + source.base.left:
+        basetop = source.base.top;
+        basebottom = source.base.bottom;
+
+        if source.square_shadow:
+            baseleft = source.base.left;
+            baseright = source.base.right;
+        else:
+            baseleft = 0;
+            baseright = 0;
+
+        if light_location[0] < dest[0]:
             hor = 'left';
-        elif light_location[0] > dest[0]  + source.base.left \
-             and light_location[0] < dest[0] + source.base.right:
+        elif light_location[0] > dest[0] \
+             and light_location[0] < dest[0] + source.width:
             hor = 'mid';
         else:
             hor = 'right';
@@ -674,54 +759,59 @@ def get_basepoints(light_location,source,dest):
             ver = 'bot';
 
         if hor == 'left' and ver == 'top':
-            basepoint1 = (dest[0]+source.base.right,dest[1]+source.base.top);
-            basepoint2 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+            basepoint1 = (dest[0]+baseright,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+baseleft,dest[1]+source.base.bottom);
         elif hor == 'mid' and ver == 'top':
-            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.top);
-            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.top);
+            basepoint1 = (dest[0]+baseleft,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+baseright,dest[1]+source.base.top);
         elif hor == 'right' and ver == 'top':
-            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.top);
-            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+            basepoint1 = (dest[0]+baseleft,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+baseright,dest[1]+source.base.bottom);
 
         elif hor == 'left' and ver == 'mid':
-            basepoint2 = (dest[0]+source.base.left,dest[1]+source.base.top);
-            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+            basepoint2 = (dest[0]+baseleft,dest[1]+source.base.top);
+            basepoint1 = (dest[0]+baseright,dest[1]+source.base.bottom);
         elif hor == 'mid' and ver == 'mid':
-            basepoint1 = (dest[0],dest[1]+source.height);
-            basepoint2 = (dest[0]+source.width,dest[1]+source.height);           
+            basepoint1 = (dest[0]+baseleft,dest[1]+source.height);
+            basepoint2 = (dest[0]+baseright,dest[1]+source.height);           
         elif hor == 'right' and ver == 'mid':
-            basepoint1 = (dest[0]+source.base.right,dest[1]+source.base.top);
-            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+            basepoint1 = (dest[0]+baseright,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+baseright,dest[1]+source.base.bottom);
 
         elif hor == 'left' and ver == 'bot':
-            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.top);
-            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+            basepoint1 = (dest[0]+baseleft,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+baseright,dest[1]+source.base.bottom);
         elif hor == 'mid' and ver == 'bot':
-            basepoint1 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
-            basepoint2 = (dest[0]+source.base.right,dest[1]+source.base.bottom);
+            basepoint1 = (dest[0]+baseleft,dest[1]+source.base.bottom);
+            basepoint2 = (dest[0]+baseright,dest[1]+source.base.bottom);
         elif hor == 'right' and ver == 'bot':
-            basepoint1 = (dest[0]+source.base.right,dest[1]+source.base.top);
-            basepoint2 = (dest[0]+source.base.left,dest[1]+source.base.bottom);
+            basepoint1 = (dest[0]+baseright,dest[1]+source.base.top);
+            basepoint2 = (dest[0]+baseleft,dest[1]+source.base.bottom);
   
     return basepoint1, basepoint2
+
+def is_texturelike(o):
+
+    if o.__class__ in [Texture,Text,Glower,Layer]:
+        return True;
+    else:
+        return False;
 
 class LightNotRenderedError(Exception):
     pass;
 
 #Probleem
-# Build-lighting moet gecleaned worden
-# Licht moet geoptimizeerd worden (veel shadowcasters = traag?);
+# Proberen: 1 lighting layer (niet nog aparte layer met objecten
 
+# Licht moet geoptimizeerd worden: alleen shadows casten bij dichtbije afstand
+# Inside en outside uit elkaar halen
 # Layer kan alleen nog met Textures omgaan
 # Layers verplaatsen?
-# Bij iedere keer dat je een disk drawt, moeten alle vertices opnieuw uitgerekend worden
-
-# Als je text drawt direct voor een shape, verschijnt de shape niet
-# Alles omzetten naar color4fv in plaats van met *
-# Kleurvertaler (van buiten allen pygame-kleuren gebruiken)
+# Shape (zoals disk) verschijnt niet als je direct daarvoor iets met alpha hebt gedrawed
+# Je kunt hetzelfde licht niet meerdere keren drawen
+# Shadowcasters worden over andere dingen heen gedrawed
 
 #Requirements
-# Light: base (voor zowel dikte als breedte), raampjes, schaduwen op elkaar laten vallen
-# Screenshots
+# Light: schaduwen op elkaar laten vallen
 # Textblocks
 # Animation
