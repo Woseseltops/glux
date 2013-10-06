@@ -55,6 +55,8 @@ class Window():
         #Prepare lighting
         self.light = None;
         self.inside = False;
+        self.shadowcasters = [];
+        self.white_shadowcasters = None;
 
     def close(self):
         p.display.quit();
@@ -183,7 +185,7 @@ class Window():
         elif new_mode == 'screen':
             glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR)            
             
-    def build_lighting(self,lights,shadowcasters,glowers):
+    def build_lighting(self,lights,glowers):
 
         #Blend the renders of all lights together
         self.change_rendermode('texture');
@@ -212,6 +214,22 @@ class Window():
         else:
             raise LightNotRenderedError;
 
+    def set_shadowcasters(self,shadowcasters):
+
+        self.shadowcasters = shadowcasters;
+
+        #Create or recreate a layer for them
+        self.white_shadowcasters = Layer(self);
+
+        for caster,casterpos in self.shadowcasters:
+            self.white_shadowcasters.append(caster.give_white_variant(),casterpos);
+
+        self.white_shadowcasters.freeze();        
+
+    def draw_white_shadowcasters(self):
+
+        self.draw(self.white_shadowcasters,(0,0));
+        
 class Texture():
 
     def __init__(self,source,colorkey=None,width=None,height=None,base=None,square_shadow=False):
@@ -609,7 +627,7 @@ class Light():
         else:
             raise LightNotRenderedError;
 
-    def render(self,pos,window,shadowcasters):
+    def render(self,pos,window):
 
         #Manual garbage collection
         del self.tex;
@@ -621,14 +639,11 @@ class Light():
         if self.shadows:
 
             #Draw shadows
-            for caster,casterpos in shadowcasters:
+            for caster,casterpos in window.shadowcasters:
                 if distance(pos,casterpos) < self.visibility_distance:
                     window.draw_shadow(self,pos,caster,casterpos);
 
-            #Draw shadowcaster silhouettes in white
-            for caster,casterpos in shadowcasters:
-                if distance(pos,casterpos) < self.visibility_distance:
-                    window.draw(caster.give_white_variant(),casterpos);
+            window.draw_white_shadowcasters();
 
         window.change_rendermode('window');
         shadowtex = window.render_texture;
@@ -795,7 +810,6 @@ class LightNotRenderedError(Exception):
     pass;
 
 #Probleem
-# Licht moet geoptimizeerd worden: alleen shadows casten bij dichtbije afstand
 # Layer kan alleen nog met Textures omgaan
 # Layers verplaatsen?
 # Shape (zoals disk) verschijnt niet als je direct daarvoor iets met alpha hebt gedrawed
