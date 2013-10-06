@@ -595,6 +595,7 @@ class Light():
 
         self.color = color;
         self.strength = strength;
+        self.visibility_distance = strength * 0.65;
         self.shadows = shadows;
         
         self.disk = Disk(strength,color,(0,0,0,0));
@@ -621,11 +622,13 @@ class Light():
 
             #Draw shadows
             for caster,casterpos in shadowcasters:
-                window.draw_shadow(self,pos,caster,casterpos);
+                if distance(pos,casterpos) < self.visibility_distance:
+                    window.draw_shadow(self,pos,caster,casterpos);
 
             #Draw shadowcaster silhouettes in white
             for caster,casterpos in shadowcasters:
-                window.draw(caster.give_white_variant(),casterpos);
+                if distance(pos,casterpos) < self.visibility_distance:
+                    window.draw(caster.give_white_variant(),casterpos);
 
         window.change_rendermode('window');
         shadowtex = window.render_texture;
@@ -688,6 +691,14 @@ def turn_around_degrees(angle,add):
         angle-= 360;
 
     return angle;
+
+def distance(x,y):
+    """Pythogorian distance""";
+
+    a = x[0] - y[0];
+    b = x[1] - y[1];
+
+    return math.sqrt(a*a+b*b);
 
 def distance_to_coord_via_point(start,distance,via):
 
