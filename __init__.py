@@ -5,8 +5,7 @@ from OpenGL.GLU import *
 
 class Window():
 
-
-    def start(self,width,height):
+    def start(self,width,height,environment_color=False):
         #Creates the acutal window
         p.display.set_mode((width,height),p.OPENGL|p.DOUBLEBUF);
 
@@ -47,9 +46,14 @@ class Window():
         self.render_texture = Texture(None,width=self.width,height=self.height);
         self.framebuffer = None;
 
+        #Environment color
+        if not environment_color:
+            self.env_color = (0,0,0,0);
+        else:
+            self.env_color = translate_color(*environment_color);
+
         #Prepare lighting
         self.light = None;
-        self.lit_up_textures = None;
         self.inside = False;
 
     def close(self):
@@ -95,7 +99,7 @@ class Window():
         if self.inside:
             length = source.height * 10;
         else:
-            length = source.height * 3;
+            length = source.height * 2;
             
         basepoint1,basepoint2 = get_basepoints(light_location,source,dest);
         topleft = distance_to_coord_via_point(light_location,length,basepoint1);
@@ -179,71 +183,22 @@ class Window():
         elif new_mode == 'screen':
             glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR)            
             
-    def build_lighting(self,environment_color,lights,shadowcasters,glowers):
+    def build_lighting(self,lights,shadowcasters,glowers):
 
-        #Translate the color
-        environment_color = translate_color(*environment_color);
-
-        #First check if any lights need to be rerendered
-        rerender_needed = False;
-
-        for l,pos in lights:
-            if l.last_pos != pos:
-                l.render(environment_color,pos,self,shadowcasters);
-                rerender_needed = True;
-
-        #Stop building light if nothing has changed
-        if not rerender_needed:
-            return;
-
-        #Blend the full renders of all lights together
+        #Blend the renders of all lights together
         self.change_rendermode('texture');
 
-        self.fill(environment_color);
+        self.fill(self.env_color);
 
         self.change_blendmode('screen');
 
         for l in lights:
-            l[0].draw((0,0));
+            l.draw((0,0));
 
         self.change_blendmode('alpha');
         self.change_rendermode('window');
 
         self.light = self.render_texture;
-
-        #Blend the light_only renders of all lights together
-        self.change_rendermode('texture');
-
-        self.fill(environment_color);
-
-        self.change_blendmode('screen');
-
-        for l in lights:
-            l[0].draw((0,0),'light_only');
-
-        self.change_blendmode('alpha');
-
-        for glower, pos in glowers: #Draw all glowers on it
-            self.draw(glower,pos);
-
-        self.change_rendermode('window');
-
-        light_only = self.render_texture;
-
-        #Create a special texture for all shadowcasters
-        transtex = create_transparent_texture(self.width,self.height); #Start with empty tex
-        self.change_rendermode('texture',transtex);
-        
-        for shadowcaster, pos in shadowcasters: #Draw all shadowcasters on it
-            self.draw(shadowcaster,pos);
-
-        self.change_blendmode('multiply');
-        self.draw(light_only,(0,0)); #Draw all lights on that
-        self.change_blendmode('alpha');
-
-        self.change_rendermode('window');
-        
-        self.lit_up_textures = self.render_texture;
 
     def draw_lighting(self):
 
@@ -254,8 +209,6 @@ class Window():
             self.draw(self.light,(0,0));
             self.change_blendmode('alpha');
 
-            #Draw the lit up shadowcaster on top of that
-            self.draw(self.lit_up_textures,(0,0));
         else:
             raise LightNotRenderedError;
 
@@ -273,7 +226,8 @@ class Texture():
 
         #Save some properties
         self.square_shadow = square_shadow
-            
+        self.white_variant = None;
+        
         if width != None:
             self.width = width;
         else:
@@ -416,6 +370,36 @@ class Texture():
             glTexCoord2f(1, 0); glVertex2f(*basepoint2);    # Bottom Right Of The Texture and Quad
 
         glEnd();
+
+    def give_white_variant(self):
+
+        if self.white_variant == None:
+            self.bind();
+            colored_pixels = glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE);
+            white_pixels = b'';
+
+            white_pixel = b'\xff\xff\xff\xff';
+            transparent_pixel = b'\x00\x00\x00\x00';
+
+            nr = 0;
+            
+            for b in colored_pixels:
+
+                if nr == 3:
+
+                    if b == 0:
+                        white_pixels += transparent_pixel;
+                    else:
+                        white_pixels += white_pixel;
+
+                nr += 1;
+                if nr > 3:
+                    nr = 0;
+
+            self.white_variant = Texture(white_pixels,width=self.width,height=self.height,
+                                         base=self.base,square_shadow=self.square_shadow);
+
+        return self.white_variant;
 
     def __del__(self):        
         glDeleteTextures(self.tex);
@@ -616,52 +600,51 @@ class Light():
         self.disk = Disk(strength,color,(0,0,0,0));
 #        self.disk = Disk(strength,color,color);
         self.tex = None;
-        self.tex_light_only = None;
-        self.last_pos = (None,None);
 
-    def draw(self,pos,mode = 'full'):
+    def draw(self,pos):
 
         if self.tex != None:
-            if mode == 'full':
-                self.tex.draw(pos);
-            elif mode == 'light_only':
-                self.tex_light_only.draw(pos);
+            self.tex.draw(pos);
         else:
             raise LightNotRenderedError;
 
-    def render(self,environment_color,pos,window,shadowcasters):
+    def render(self,pos,window,shadowcasters):
 
         #Manual garbage collection
         del self.tex;
-        del self.tex_light_only;
 
-        #Render the full texture
-        window.change_rendermode('texture');
-
-        window.fill(environment_color);
-        window.draw(self.disk,pos);
+        #Render shadowlayer
+        transtex = create_transparent_texture(window.width,window.height); #Start with empty tex
+        window.change_rendermode('texture',transtex);
 
         if self.shadows:
+
+            #Draw shadows
             for caster,casterpos in shadowcasters:
                 window.draw_shadow(self,pos,caster,casterpos);
+
+            #Draw shadowcaster silhouettes in white
+            for caster,casterpos in shadowcasters:
+                window.draw(caster.give_white_variant(),casterpos);
+
+        window.change_rendermode('window');
+        shadowtex = window.render_texture;
+
+        #Render this light
+        window.change_rendermode('texture');
+
+        window.fill(window.env_color);
+        window.draw(self.disk,pos);
+
+        #Put the shadowlayer on top        
+        window.change_blendmode('multiply'); 
+        window.draw(shadowtex,(0,0));
+        window.change_blendmode('alpha');
 
         window.change_rendermode('window');
 
         self.tex = window.render_texture;
-
-        #Render the light only texture
-        window.change_rendermode('texture');
-
-        window.fill(environment_color);
-        window.draw(self.disk,pos);
-        
-        window.change_rendermode('window');
-
-        self.tex_light_only = window.render_texture;
-
-        #Cache this if this light's position doesn't change
-        self.last_pos = pos;
-        
+        del shadowtex;
 
 def angle_to_loc(startloc,angle,distance):
 
@@ -717,7 +700,7 @@ def distance_to_coord_via_point(start,distance,via):
 def create_transparent_texture(width,height):
 
     white_pixel = b'\xff\xff\xff\xff';
-    transparent_pixel = b'\xff\x00\xb4\x00';
+    transparent_pixel = b'\xff\xff\xff\x00';
     s = (width*height)*transparent_pixel;
     
     return Texture(s,width=width,height=height);
@@ -740,7 +723,7 @@ def get_basepoints(light_location,source,dest):
             baseright = source.base.right;
         else:
             baseleft = 0;
-            baseright = 0;
+            baseright = source.width;
 
         if light_location[0] < dest[0]:
             hor = 'left';
@@ -801,17 +784,12 @@ class LightNotRenderedError(Exception):
     pass;
 
 #Probleem
-# Proberen: 1 lighting layer (niet nog aparte layer met objecten
-
 # Licht moet geoptimizeerd worden: alleen shadows casten bij dichtbije afstand
-# Inside en outside uit elkaar halen
 # Layer kan alleen nog met Textures omgaan
 # Layers verplaatsen?
 # Shape (zoals disk) verschijnt niet als je direct daarvoor iets met alpha hebt gedrawed
-# Je kunt hetzelfde licht niet meerdere keren drawen
-# Shadowcasters worden over andere dingen heen gedrawed
 
 #Requirements
-# Light: schaduwen op elkaar laten vallen
 # Textblocks
 # Animation
+# Light: schaduwen op elkaar laten vallen
