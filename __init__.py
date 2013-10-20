@@ -87,7 +87,7 @@ class Window():
         if dest2 == None:
             source.draw(dest1);
         else:
-            dest2 = self._translate_coords(dest2,extra);            
+            dest2 = self.translate_coords(dest2,extra);            
             source.draw(dest1,dest2);
 
     def draw_shadow(self, light, light_location, source, dest):
@@ -682,6 +682,9 @@ class Disk():
 
     def draw(self,pos):
         
+        #Unbind previous textures
+        glBindTexture(GL_TEXTURE_2D, 0);
+
         #Reset the position
         glLoadIdentity()    
 
@@ -713,9 +716,12 @@ class Line():
     def __init__(self,size,color):
 
         self.size = size;
-        self.color = color;
+        self.color = translate_color(*color);
 
     def draw(self,c1,c2):
+
+        #Unbind previous textures
+        glBindTexture(GL_TEXTURE_2D, 0);
 
         #Reset the position
         glLoadIdentity()    
@@ -934,7 +940,6 @@ class LightNotRenderedError(Exception):
 #Probleem
 # Layer kan alleen nog met Textures omgaan
 # Layers verplaatsen?
-# Shape (zoals disk) verschijnt niet als je direct daarvoor iets met alpha hebt gedrawed
 
 #Requirements
 # Light: schaduwen op elkaar laten vallen
