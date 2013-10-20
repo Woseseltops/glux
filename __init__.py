@@ -1,4 +1,5 @@
 import math
+import os
 import pygame as p
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -261,6 +262,11 @@ class Texture():
         else:
             self.base = p.Rect(*base);
 
+        if self.height > self.width:
+            self.longest_side = self.height;        
+        else:
+            self.longest_side = self.width;        
+
         #Transform to texture
         if colorkey != None:
             current_surface.set_colorkey(colorkey);
@@ -268,6 +274,10 @@ class Texture():
 
         #Transform to displaylist
         self.texture_to_displaylist();
+
+    def get_center(self,loc):
+
+        return (loc[0] + self.width / 2, loc[1] + self.height / 2);
 
     def _surface_to_texture(self,surface):
 
@@ -422,6 +432,53 @@ class Texture():
     def __del__(self):        
         glDeleteTextures(self.tex);
 
+class Animation():
+
+    def __init__(self,name,speed,path=None):
+
+        """Speed can go from 0 to 100"""
+
+        self.unique_frames = [];
+        self.frames = [];
+
+        if path == None:
+            files = os.listdir();
+        else:
+            files = os.listdir(path);
+
+        for f in files:
+            if name in f:
+                if path==None:
+                    file_loc = f;
+                else:
+                    file_loc = path+'/'+f;
+                self.unique_frames.append(Texture(file_loc));
+
+        for uf in self.unique_frames:
+            for i in range(101-speed):
+                self.frames.append(uf);
+
+        self.current_frame = 0;
+        self.paused = False;
+
+        self.height = self.frames[0].height;
+        self.width = self.frames[0].width;        
+
+    def tick(self):
+        self.current_frame += 1;
+
+        if self.current_frame + 1 > len(self.frames):
+            self.current_frame = 0;
+
+    def draw(self,dest):
+        self.frames[self.current_frame].draw(dest);
+
+    def pause(self):
+        self.paused = True;
+
+    def unpause(self):
+        self.paused = False;
+
 class Layer():
 
     def __init__(self,window):
@@ -510,6 +567,70 @@ class Text(Texture):
 
         #Transform to displaylist
         self.texture_to_displaylist();
+
+class Textblock(Texture):
+
+    def __init__(self,text,font,color,width,center=False):
+
+        self.font = font;
+        self.width = width;
+        self.color = color;
+        self.text = text;
+        self.center = center;
+
+        #Will be calculated later
+        self.lines = [''];
+        self.images = [];
+        self.height = 0;
+
+        self._text_to_lines();
+        self._lines_to_images();
+        
+    def _text_to_lines(self):
+
+        words = self.text.split();
+        current_line = 0;
+        
+        for w in words:
+
+            #How long will the line be with this word added?
+            if self.lines[current_line] == '':
+                trying_out_text = w;
+            else:
+                trying_out_text = self.lines[current_line] + ' ' + w;            
+
+            #If within block, add it
+            if self.font.size(trying_out_text)[0] < self.width:
+                self.lines[current_line] = trying_out_text;
+
+            #Else, start a new line
+            else:
+                self.lines.append(w);
+                current_line += 1;
+
+    def _lines_to_images(self):
+
+        self.height = 0;
+
+        for l in self.lines:
+            t = Text(l,self.font,self.color);
+            self.images.append(t);
+
+            #Get the highest line height
+            if t.height > self.height:
+                self.height = t.height;
+
+    def draw(self,dest):
+
+        x, y = dest;
+        original_x = x;
+
+        for i in self.images:
+            if self.center:
+                x = round(original_x + (self.width - i.width) / 2);
+
+            i.draw((x,y));
+            y -= self.height;
 
 class Glower(Texture):
 
@@ -613,7 +734,7 @@ class Light():
 
         self.color = color;
         self.strength = strength;
-        self.visibility_distance = strength * 0.65;
+        self.visibility_distance = strength * 0.5;
         self.shadows = shadows;
         
         self.disk = Disk(strength,color,(0,0,0,0));
@@ -640,7 +761,8 @@ class Light():
 
             #Draw shadows
             for caster,casterpos in window.shadowcasters:
-                if distance(pos,casterpos) < self.visibility_distance:
+                if distance(pos,caster.get_center(casterpos)) < \
+                   self.visibility_distance + caster.longest_side:
                     window.draw_shadow(self,pos,caster,casterpos);
 
             window.draw_white_shadowcasters();
@@ -801,7 +923,7 @@ def get_basepoints(light_location,source,dest):
 
 def is_texturelike(o):
 
-    if o.__class__ in [Texture,Text,Glower,Layer]:
+    if o.__class__ in [Texture,Text,Glower,Layer,Animation,Textblock]:
         return True;
     else:
         return False;
@@ -815,6 +937,4 @@ class LightNotRenderedError(Exception):
 # Shape (zoals disk) verschijnt niet als je direct daarvoor iets met alpha hebt gedrawed
 
 #Requirements
-# Textblocks
-# Animation
 # Light: schaduwen op elkaar laten vallen
