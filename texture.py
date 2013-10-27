@@ -16,6 +16,7 @@ class Texture():
             current_surface = None;
 
         #Save some properties
+        self.alpha = 1;
         self.square_shadow = square_shadow
         self.white_variant = None;
 
@@ -86,6 +87,7 @@ class Texture():
         #Put the texture on a qaudrangle
         self.bind();
         glBegin(GL_QUADS);
+
         glTexCoord2f(0, 0); glVertex2f(0, 0);    # Bottom Left Of The Texture and Quad
         glTexCoord2f(0, 1); glVertex2f(0, self.height);    # Top Left Of The Texture and Quad
         glTexCoord2f(1, 1); glVertex2f(self.width, self.height);    # Top Right Of The Texture and Quad
@@ -107,7 +109,7 @@ class Texture():
     def draw(self,dest):
 
         #Reset the color
-        glColor4fv((1,1,1,1));
+        glColor4fv((1,1,1,self.alpha));
 
         #Reset the position
         glLoadIdentity();
@@ -200,6 +202,10 @@ class Texture():
                                          base=self.base,square_shadow=self.square_shadow);
 
         return self.white_variant;
+
+    def get_rect(self):
+
+        return p.Rect(0,0,self.width,self.height)
 
     def __del__(self):
         glDeleteTextures(self.tex);
@@ -340,6 +346,8 @@ class Text(Texture):
         #Transform to displaylist
         self.texture_to_displaylist();
 
+        self.alpha = 1;
+
 class Textblock(Texture):
 
     def __init__(self,text,font,color,width,center=False):
@@ -404,6 +412,10 @@ class Textblock(Texture):
             i.draw((x,y));
             y -= self.height;
 
+    def __del__(self):
+
+        for i in self.images:
+            del i;
 
 def create_transparent_texture(width,height):
 
