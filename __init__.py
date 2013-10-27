@@ -13,7 +13,7 @@ import glux.tools
 
 class Window():
 
-    def start(self,width,height,environment_color=False):
+    def start(self,width,height,caption,environment_color=False):
         #Creates the acutal window
         p.display.set_mode((width,height),p.OPENGL|p.DOUBLEBUF);
 
@@ -66,11 +66,14 @@ class Window():
         self.shadowcasters = [];
         self.white_shadowcasters = None;
 
+        #Caption
+        p.display.set_caption(caption)
+
     def close(self):
         p.display.quit();
 
     def update(self):
-        p.display.flip();        
+        p.display.flip();
 
     def draw_empty_background(self):
         self.fill((0,0,0,0));
