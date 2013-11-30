@@ -5,11 +5,15 @@ import glux.texture
 
 class Texture():
 
-    def __init__(self,source,colorkey=None,width=None,height=None,base=None,square_shadow=False):
+    def __init__(self,source,colorkey=None,width=None,height=None,base=None,square_shadow=False,transparent=False):
 
         #Load the image via a pygame Surface
         if isinstance(source,str):
-            current_surface = p.image.load(source).convert();
+            if not transparent:
+                current_surface = p.image.load(source).convert();
+            else:
+                current_surface = p.image.load(source).convert_alpha();
+
         elif isinstance(source,p.Surface) or isinstance(source,bytes):
             current_surface = source;
         elif source == None:
@@ -265,9 +269,6 @@ class Layer():
         self.width = 0;
         self.height = 0;
 
-        #Create displaylist
-        self.glist = glGenLists(1);
-
         #Save the textures
         self.textures = [];
 
@@ -281,34 +282,68 @@ class Layer():
         for i in material:
             self.textures.append(i);
 
+    def _add_tex_to_displaylist(self,texture,dest):
+
+        #Put the texture on a quadrangle
+        texture.bind();
+
+        dest = self.window.translate_coords(dest,texture.height);
+        glLoadIdentity();
+        glTranslate(dest[0],dest[1],0);
+
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0); glVertex2f(0, 0);    # Bottom Left Of The Texture and Quad
+        glTexCoord2f(0, 1); glVertex2f(0, texture.height);    # Top Left Of The Texture and Quad
+        glTexCoord2f(1, 1); glVertex2f(texture.width, texture.height);    # Top Right Of The Texture and Quad
+        glTexCoord2f(1, 0); glVertex2f(texture.width, 0);    # Bottom Right Of The Texture and Quad
+
+        #Finish
+        glEnd();
+
     def freeze(self):
 
-        #Bind the displaylist
-        glNewList(self.glist,GL_COMPILE);
+        displaylist_created = False;
+
+        while not displaylist_created:
+            try:
+                #Create displaylist
+                self.glist = glGenLists(1);
+
+                #Bind the displaylist
+                glNewList(self.glist,GL_COMPILE);
+                displaylist_created = True;
+            except:
+                print('Warning: OpenGL displaylist creation error')
 
         for texture, dest in self.textures:
-            #Put the texture on a quadrangle
-            texture.bind();
 
-            dest = self.window.translate_coords(dest,texture.height);
-            glLoadIdentity();
-            glTranslate(dest[0],dest[1],0);
+            if not isinstance(texture,Textblock):
+                self._add_tex_to_displaylist(texture, dest);
 
-            glBegin(GL_QUADS);
-            glTexCoord2f(0, 0); glVertex2f(0, 0);    # Bottom Left Of The Texture and Quad
-            glTexCoord2f(0, 1); glVertex2f(0, texture.height);    # Top Left Of The Texture and Quad
-            glTexCoord2f(1, 1); glVertex2f(texture.width, texture.height);    # Top Right Of The Texture and Quad
-            glTexCoord2f(1, 0); glVertex2f(texture.width, 0);    # Bottom Right Of The Texture and Quad
+                #See if you need to be bigger
+                if texture.height > self.height:
+                    self.height = texture.height;
 
-            #Finish
-            glEnd();
+                if texture.width > self.width:
+                    self.width = texture.width;
+            else:
+                x, y = dest;
+                original_x = x;
 
-            #See if you need to be bigger
-            if texture.height > self.height:
-                self.height = texture.height;
+                for i in texture.images:
+                    if texture.center:
+                        x = round(original_x + (texture.width - i.width) / 2);
 
-            if texture.width > self.width:
-                self.widht = texture.width;
+                    self._add_tex_to_displaylist(i,(x,y));
+
+                    #See if you need to be bigger
+                    if i.height > self.height:
+                        self.height = i.height;
+
+                    if texture.width > self.width:
+                        self.width = texture.width;
+
+                    y += texture.height;
 
         glEndList();
 
@@ -368,6 +403,7 @@ class Textblock(Texture):
 
     def _text_to_lines(self):
 
+        self.lines = [''];
         words = self.text.split();
         current_line = 0;
 
@@ -391,6 +427,7 @@ class Textblock(Texture):
     def _lines_to_images(self):
 
         self.height = 0;
+        self.images = [];
 
         for l in self.lines:
             t = Text(l,self.font,self.color);
@@ -399,6 +436,14 @@ class Textblock(Texture):
             #Get the highest line height
             if t.height > self.height:
                 self.height = t.height;
+
+    def change_text(self,newtext):
+        """Freeze text into image again""";
+
+        self.text = newtext;
+
+        self._text_to_lines();
+        self._lines_to_images();
 
     def draw(self,dest):
 
