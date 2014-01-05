@@ -51,7 +51,10 @@ class Disk():
 
             glVertex2f(*loc);
 
-        glEnd()
+        try:
+            glEnd();
+        except:
+            print('Error drawing circle');
 
 
 class Line():
@@ -75,4 +78,9 @@ class Line():
         glBegin(GL_LINES);
         glVertex2d(*c1);
         glVertex2d(*c2);
-        glEnd();
+
+        try:
+            glEnd();
+        except:
+            print('Error drawing line');
+
