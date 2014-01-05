@@ -3,6 +3,12 @@ import os
 import pygame as p
 from OpenGL.GL import *
 from OpenGL.GLU import *
+import OpenGL.platform.win32
+import OpenGL.arrays.ctypesarrays
+import OpenGL.arrays.lists
+import OpenGL.arrays.numbers
+import OpenGL.arrays.strings
+import OpenGL.arrays.nones
 
 #Glux package
 from glux.texture import *
@@ -61,7 +67,7 @@ class Window():
             self.env_color = glux.tools.translate_color(*environment_color);
 
         #Prepare lighting
-        self.light = None;
+        self.light = {};
         self.inside = False;
         self.shadowcasters = [];
         self.white_shadowcasters = None;
@@ -88,6 +94,7 @@ class Window():
         #pygame to opengl coordinates
         if is_texturelike(source):
             extra = source.height;
+            
         else:
             extra = 0;
 
@@ -133,7 +140,13 @@ class Window():
         y = self.height - coords[1] - extra;
         return (coords[0],y);
         
-    def change_rendermode(self,new_mode,use_texture = None):
+    def change_rendermode(self,new_mode,use_texture=None, width=None, height=None):
+
+        if width == None:
+            width = self.width;
+
+        if height == None:
+            height = self.height;
 
         if new_mode == self.render_to:
             return;
@@ -152,7 +165,7 @@ class Window():
 
             #Create a new render_texture to render to
             if use_texture == None:
-                self.render_texture = Texture(None,width=self.width,height=self.height);
+                self.render_texture = Texture(None,width=width,height=height);
             else:
                 self.render_texture = use_texture;
             self.render_texture.bind();
@@ -163,6 +176,7 @@ class Window():
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.render_texture.tex, 0);
                     break;
                 except:
+                    print('Warning: texture creation error')
                     pass;
             
             self.render_texture.unbind();
@@ -196,10 +210,16 @@ class Window():
         elif new_mode == 'screen':
             glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR)            
             
-    def build_lighting(self,lights,glowers):
+    def build_lighting(self,lights,glowers,width=None,height=None, key='main'):
+
+        if width == None:
+            width = self.width;
+
+        if height == None:
+            height = self.height;
 
         #Blend the renders of all lights together
-        self.change_rendermode('texture');
+        self.change_rendermode('texture',width=width,height=height);
 
         self.fill(self.env_color);
 
@@ -211,15 +231,18 @@ class Window():
         self.change_blendmode('alpha');
         self.change_rendermode('window');
 
-        self.light = self.render_texture;
+        self.light[key] = self.render_texture;
 
-    def draw_lighting(self):
+    def draw_lighting(self, pos = None, key = 'main'):
 
-        if self.light != None:
+        if pos == None:
+            pos = (0,0);
+
+        if self.light != {}:
 
             #Draw light and shadows on top of the world
             self.change_blendmode('multiply');
-            self.draw(self.light,(0,0));
+            self.draw(self.light[key],pos);
             self.change_blendmode('alpha');
 
         else:

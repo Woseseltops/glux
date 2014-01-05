@@ -22,13 +22,21 @@ class Light():
         else:
             raise LightNotRenderedError;
 
-    def render(self,pos,window):
-
+    def render(self,pos,window,width=None,height=None):
+    
         #Manual garbage collection
         del self.tex;
 
+        #Create the (empty) shadow layer
+        if width == None:
+            width = window.width;
+
+        if height == None:
+            height = window.height;
+
+        transtex = glux.texture.create_transparent_texture(width,height);
+
         #Render shadowlayer
-        transtex = glux.texture.create_transparent_texture(window.width,window.height); #Start with empty tex
         window.change_rendermode('texture',transtex);
 
         if self.shadows:
@@ -45,7 +53,7 @@ class Light():
         shadowtex = window.render_texture;
 
         #Render this light
-        window.change_rendermode('texture');
+        window.change_rendermode('texture',width=width,height=height);
 
         window.fill(window.env_color);
         window.draw(self.disk,pos);
