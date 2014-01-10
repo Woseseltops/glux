@@ -94,7 +94,6 @@ class Window():
         #pygame to opengl coordinates
         if is_texturelike(source):
             extra = source.height;
-            
         else:
             extra = 0;
 

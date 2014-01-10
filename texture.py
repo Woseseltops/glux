@@ -88,8 +88,12 @@ class Texture():
         #Bind the displaylist
         glNewList(self.list,GL_COMPILE);
 
+        #Reset the color
+        glColor4fv((1,1,1,self.alpha));
+
         #Put the texture on a qaudrangle
         self.bind();
+
         glBegin(GL_QUADS);
 
         glTexCoord2f(0, 0); glVertex2f(0, 0);    # Bottom Left Of The Texture and Quad
@@ -111,9 +115,6 @@ class Texture():
         glBindTexture(GL_TEXTURE_2D, 0);
 
     def draw(self,dest):
-
-        #Reset the color
-        glColor4fv((1,1,1,self.alpha));
 
         #Reset the position
         glLoadIdentity();
@@ -150,7 +151,7 @@ class Texture():
         glLoadIdentity();
 
         #Travel to the coordinate
-#        glTranslate(dest[0],dest[1],0);
+        glTranslate(dest[0],dest[1],0);
 
         #Put the texture on a qaudrangle
         if self.square_shadow:
@@ -220,6 +221,7 @@ class Animation():
 
         """Speed can go from 0 to 100"""
 
+        self.alpha = 1;
         self.unique_frames = [];
         self.frames = [];
 
@@ -368,6 +370,8 @@ class Text(Texture):
 
     def __init__(self,text,font,color):
 
+        self.alpha = 1;
+
         #Text to surface
         current_surface = font.render(text, True, color)
 
@@ -387,6 +391,7 @@ class Textblock(Texture):
 
     def __init__(self,text,font,color,width,center=False):
 
+        self.alpha = 1;
         self.font = font;
         self.width = width;
         self.color = color;
