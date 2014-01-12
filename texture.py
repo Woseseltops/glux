@@ -2,6 +2,7 @@ import pygame as p
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import glux.texture
+import os
 
 class Texture():
 
@@ -217,7 +218,7 @@ class Texture():
 
 class Animation():
 
-    def __init__(self,name,speed,path=None):
+    def __init__(self,name,speed,path=None,colorkey=None):
 
         """Speed can go from 0 to 100"""
 
@@ -236,7 +237,7 @@ class Animation():
                     file_loc = f;
                 else:
                     file_loc = path+'/'+f;
-                self.unique_frames.append(Texture(file_loc));
+                self.unique_frames.append(Texture(file_loc,colorkey=colorkey));
 
         for uf in self.unique_frames:
             for i in range(101-speed):
@@ -248,11 +249,28 @@ class Animation():
         self.height = self.frames[0].height;
         self.width = self.frames[0].width;
 
-    def tick(self):
-        self.current_frame += 1;
+    def get_rect(self):
 
-        if self.current_frame + 1 > len(self.frames):
-            self.current_frame = 0;
+        return p.Rect(0,0,self.width,self.height)
+
+    def tick(self):
+
+        """Changes which frame is the current frame, returns whether this is another image""";
+
+        old = self.frames[self.current_frame];
+
+        if not self.paused:
+            self.current_frame += 1;
+
+            if self.current_frame + 1 > len(self.frames):
+                self.current_frame = 0;
+
+        new = self.frames[self.current_frame];
+
+        if old == new:
+            return False;
+        else:
+            return True;
 
     def draw(self,dest):
         self.frames[self.current_frame].draw(dest);
