@@ -21,7 +21,7 @@ class Texture():
             current_surface = None;
 
         #Save some properties
-        self.alpha = 1;
+        self._alpha = 1;
         self.square_shadow = square_shadow
         self.white_variant = None;
 
@@ -53,6 +53,17 @@ class Texture():
         #Transform to displaylist
         self.texture_to_displaylist();
 
+    @property
+    def alpha(self):
+
+        return self._alpha;
+
+    @alpha.setter
+    def alpha(self,value):
+
+        self._alpha = value;
+        self.texture_to_displaylist();
+
     def get_center(self,loc):
 
         return (loc[0] + self.width / 2, loc[1] + self.height / 2);
@@ -75,6 +86,7 @@ class Texture():
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); #Pretty upscaling
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); #Pretty downscaling
 
+
         #Put the surface in
         if surface != None:
             glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texturedata );
@@ -90,10 +102,15 @@ class Texture():
         glNewList(self.list,GL_COMPILE);
 
         #Reset the color
-        glColor4fv((1,1,1,self.alpha));
+        glColor4fv((1,1,1,self._alpha));
 
         #Put the texture on a qaudrangle
         self.bind();
+
+        #Point sprites
+#        glBegin(GL_POINTS);
+#        glTexCoord2f(0, 0);
+#        glVertex3f(0.0, 0.0,0);
 
         glBegin(GL_QUADS);
 
@@ -115,13 +132,20 @@ class Texture():
 
         glBindTexture(GL_TEXTURE_2D, 0);
 
-    def draw(self,dest):
+    def draw(self,dest,rotation=None):
 
         #Reset the position
         glLoadIdentity();
 
         #Travel to the coordinate
         glTranslate(dest[0],dest[1],0);
+
+        if rotation != None:
+            centerx = 56;
+            centery = 56;
+            glTranslatef(centerx,centery,0);
+            glRotate(rotation,0,0,-1);
+            glTranslatef(-centerx,-centery,0);
 
         #Draw the displaylist
         glCallList(self.list);
@@ -222,7 +246,7 @@ class Animation():
 
         """Speed can go from 0 to 100"""
 
-        self.alpha = 1;
+        self._alpha = 1;
         self.unique_frames = [];
         self.frames = [];
 
@@ -272,7 +296,7 @@ class Animation():
         else:
             return True;
 
-    def draw(self,dest):
+    def draw(self,dest,rotation=None):
         self.frames[self.current_frame].draw(dest);
 
     def pause(self):
@@ -369,7 +393,7 @@ class Layer():
 
         self.frozen = True;
 
-    def draw(self,dest):
+    def draw(self,dest,rotation=None):
 
         if self.frozen:
             #Reset the color
@@ -388,7 +412,7 @@ class Text(Texture):
 
     def __init__(self,text,font,color):
 
-        self.alpha = 1;
+        self._alpha = 1;
 
         #Text to surface
         current_surface = font.render(text, True, color)
@@ -403,13 +427,11 @@ class Text(Texture):
         #Transform to displaylist
         self.texture_to_displaylist();
 
-        self.alpha = 1;
-
 class Textblock(Texture):
 
     def __init__(self,text,font,color,width,center=False):
 
-        self.alpha = 1;
+        self._alpha = 1;
         self.font = font;
         self.width = width;
         self.color = color;
@@ -468,7 +490,20 @@ class Textblock(Texture):
         self._text_to_lines();
         self._lines_to_images();
 
-    def draw(self,dest):
+    @property
+    def alpha(self):
+
+        return self._alpha;
+
+    @alpha.setter
+    def alpha(self,value):
+
+        self._alpha = value;
+
+        for i in self.images:
+            i.alpha = self._alpha;
+
+    def draw(self,dest,rotation=None):
 
         x, y = dest;
         original_x = x;

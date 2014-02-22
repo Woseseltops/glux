@@ -22,7 +22,7 @@ class Disk():
 
         self.parts = parts;
 
-    def draw(self,pos):
+    def draw(self,pos,rotation=None):
 
         #Unbind previous textures
         glBindTexture(GL_TEXTURE_2D, 0);

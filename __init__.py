@@ -20,40 +20,12 @@ import glux.tools
 class Window():
 
     def start(self,width,height,caption,environment_color=False):
-        #Creates the acutal window
-        p.display.set_mode((width,height),p.OPENGL|p.DOUBLEBUF);
 
-        #Load the window
-        glViewport(0, 0, width, height);
-
-        #Set the 2D mode        
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-
-        gluOrtho2D(0,width,0,height);
-
-        #?
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
+        self.fullscreen = False;
         self.width = width;
         self.height = height;
-
-        #Turn on smooth shading
-        glShadeModel(GL_SMOOTH);
-
-        #Default background color
-        glClearColor(0.0,0.0,0.0,1.0);
-
-        #Start depth buffer
-        glClearDepth(1.0);
-
-        #Enable textures
-        glEnable(GL_TEXTURE_2D);
-
-        #Alpha staat standaard aan
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        self.caption = caption;
+        self._create_window();
 
         #Render mode mode
         self.render_to = 'window';
@@ -72,8 +44,45 @@ class Window():
         self.shadowcasters = [];
         self.white_shadowcasters = None;
 
+    def _create_window(self):
+
+        #Creates the acutal window
+        if not self.fullscreen:
+            p.display.set_mode((self.width,self.height),p.OPENGL|p.DOUBLEBUF);
+        else:
+            p.display.set_mode((self.width,self.height),p.OPENGL|p.DOUBLEBUF|p.FULLSCREEN);
+
+        #Load the window
+        glViewport(0, 0, self.width, self.height);
+
+        #Set the 2D mode
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+
+        gluOrtho2D(0,self.width,0,self.height);
+
+        #?
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        #Turn on smooth shading
+        glShadeModel(GL_SMOOTH);
+
+        #Default background color
+        glClearColor(0.0,0.0,0.0,1.0);
+
+        #Start depth buffer
+        glClearDepth(1.0);
+
+        #Enable textures
+        glEnable(GL_TEXTURE_2D);
+
+        #Alpha staat standaard aan
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
         #Caption
-        p.display.set_caption(caption)
+        p.display.set_caption(self.caption)
 
     def close(self):
         p.display.quit();
@@ -89,7 +98,7 @@ class Window():
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()        
         
-    def draw(self,source,dest1, dest2=None): 
+    def draw(self,source,dest1, dest2=None,rotation=None): 
 
         #pygame to opengl coordinates
         if is_texturelike(source):
@@ -101,7 +110,7 @@ class Window():
 
         #Draw
         if dest2 == None:
-            source.draw(dest1);
+            source.draw(dest1,rotation);
         else:
             dest2 = self.translate_coords(dest2,extra);            
             source.draw(dest1,dest2);
