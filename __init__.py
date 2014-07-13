@@ -3,7 +3,13 @@ import os
 import pygame as p
 from OpenGL.GL import *
 from OpenGL.GLU import *
-import OpenGL.platform.win32
+from OpenGL.GL.EXT.framebuffer_object import *
+
+import platform
+
+if 'Windows' in platform.platform():
+    import OpenGL.platform.win32
+
 import OpenGL.arrays.ctypesarrays
 import OpenGL.arrays.lists
 import OpenGL.arrays.numbers
@@ -19,9 +25,9 @@ import glux.tools
 
 class Window():
 
-    def start(self,width,height,caption,environment_color=False):
+    def start(self,width,height,caption,fullscreen = False,environment_color=False):
 
-        self.fullscreen = False;
+        self.fullscreen = fullscreen;
         self.width = width;
         self.height = height;
         self.caption = caption;
@@ -101,7 +107,9 @@ class Window():
     def draw(self,source,dest1, dest2=None,rotation=None): 
 
         #pygame to opengl coordinates
-        if is_texturelike(source):
+        if isinstance(source,Layer):
+            extra = self.height;
+        elif is_texturelike(source):
             extra = source.height;
         else:
             extra = 0;
@@ -163,13 +171,13 @@ class Window():
 
             #Explicit garbage colleciton
             if self.framebuffer != None:
-                glDeleteFramebuffers(self.framebuffer)
+                glDeleteFramebuffersEXT(self.framebuffer);
 
             del self.render_texture;
 
             #Create the framebuffer (the target)
-            self.framebuffer = glGenFramebuffers(1);
-            glBindFramebuffer(GL_FRAMEBUFFER, self.framebuffer);
+            self.framebuffer = glGenFramebuffersEXT(1);
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, self.framebuffer);
 
             #Create a new render_texture to render to
             if use_texture == None:
@@ -181,7 +189,7 @@ class Window():
             #Link it to the buffer (try again if memory problem)
             while True:
                 try:
-                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.render_texture.tex, 0);
+                    glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.render_texture.tex, 0);
                     break;
                 except:
                     print('Warning: texture creation error')
@@ -197,7 +205,7 @@ class Window():
         elif new_mode == 'window':
 
             #Assuming you was in texture mode before, unbind the framebuffer
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
 
             #Make a new displaylist for the newly generated texture
             self.render_texture.texture_to_displaylist();
@@ -271,6 +279,10 @@ class Window():
     def draw_white_shadowcasters(self):
 
         self.draw(self.white_shadowcasters,(0,0));
+
+    def set_env_color(self,color):
+
+        self.env_color = glux.tools.translate_color(*color);
 
 #Probleem
 # Layer kan alleen nog met Textures omgaan
