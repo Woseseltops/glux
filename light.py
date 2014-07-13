@@ -55,7 +55,7 @@ class Light():
         #Render this light
         window.change_rendermode('texture',width=width,height=height);
 
-        window.fill(window.env_color);
+        window.fill((0,0,0,0));
         window.draw(self.disk,pos);
 
         #Put the shadowlayer on top
