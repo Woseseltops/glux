@@ -255,6 +255,8 @@ class Animation():
         else:
             files = os.listdir(path);
 
+        files.sort();
+
         for f in files:
             if name in f:
                 if path==None:
@@ -316,7 +318,9 @@ class Layer():
         #Save the textures
         self.textures = [];
 
+        self.glist = None;
         self.frozen = False;
+        self.pointer_pos = (0,0);
 
     def append(self,material,location=None):
 
@@ -332,8 +336,12 @@ class Layer():
         texture.bind();
 
         dest = self.window.translate_coords(dest,texture.height);
-        glLoadIdentity();
-        glTranslate(dest[0],dest[1],0);
+
+        x_diff = dest[0] - self.pointer_pos[0];
+        y_diff = dest[1] - self.pointer_pos[1];
+
+        glTranslate(x_diff,y_diff,0);
+        self.pointer_pos = dest;
 
         glBegin(GL_QUADS);
         glTexCoord2f(0, 0); glVertex2f(0, 0);    # Bottom Left Of The Texture and Quad
@@ -345,6 +353,9 @@ class Layer():
         glEnd();
 
     def freeze(self):
+
+        glLoadIdentity();
+        self.pointer_pos = (0,0);
 
         displaylist_created = False;
 
@@ -403,7 +414,7 @@ class Layer():
             glLoadIdentity();
 
             #Travel to the coordinate
-            glTranslate(0,0,0);
+            glTranslate(dest[0],dest[1],0);
 
             #Draw the displaylist
             glCallList(self.glist);
@@ -530,7 +541,7 @@ def create_transparent_texture(width,height):
 
 def is_texturelike(o):
 
-    if o.__class__ in [Texture,Text,glux.light.Glower,Layer,Animation,Textblock]:
+    if o.__class__ in [Texture,Text,glux.light.Glower,Animation,Textblock]:
         return True;
     else:
         return False;
