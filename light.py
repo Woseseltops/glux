@@ -27,19 +27,19 @@ class Light():
         #Manual garbage collection
         del self.tex;
 
-        #Create the (empty) shadow layer
         if width == None:
             width = window.width;
 
         if height == None:
             height = window.height;
 
-        transtex = glux.texture.create_transparent_texture(width,height);
-
-        #Render shadowlayer
-        window.change_rendermode('texture',transtex);
-
         if self.shadows:
+
+            #Create the (empty) shadow layer
+            transtex = glux.texture.create_transparent_texture(width,height);
+
+            #Render shadowlayer
+            window.change_rendermode('texture',transtex);
 
             #Draw shadows
             for caster,casterpos in window.shadowcasters:
@@ -49,8 +49,8 @@ class Light():
 
             window.draw_white_shadowcasters();
 
-        window.change_rendermode('window');
-        shadowtex = window.render_texture;
+            window.change_rendermode('window');
+            shadowtex = window.render_texture;
 
         #Render this light
         window.change_rendermode('texture',width=width,height=height);
@@ -59,14 +59,15 @@ class Light():
         window.draw(self.disk,pos);
 
         #Put the shadowlayer on top
-        window.change_blendmode('multiply');
-        window.draw(shadowtex,(0,0));
-        window.change_blendmode('alpha');
+        if self.shadows:
+            window.change_blendmode('multiply');
+            window.draw(shadowtex,(0,0));
+            window.change_blendmode('alpha');
+
+            del shadowtex;
 
         window.change_rendermode('window');
-
         self.tex = window.render_texture;
-        del shadowtex;
 
 class Glower(glux.texture.Texture):
 
