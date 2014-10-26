@@ -61,8 +61,9 @@ class Texture():
     @alpha.setter
     def alpha(self,value):
 
-        self._alpha = value;
-        self.texture_to_displaylist();
+        if value != self._alpha:
+            self._alpha = value;
+            self.texture_to_displaylist();
 
     def get_center(self,loc):
 
