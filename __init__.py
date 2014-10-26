@@ -181,7 +181,16 @@ class Window():
 
             #Create a new render_texture to render to
             if use_texture == None:
-                self.render_texture = Texture(None,width=width,height=height);
+                success = False;
+
+                while success == False:
+                    try:
+                        self.render_texture = Texture(None,width=width,height=height);
+                        success = True;
+                    except:
+                        print('%%FAILEDD')
+                        pass;
+
             else:
                 self.render_texture = use_texture;
             self.render_texture.bind();
