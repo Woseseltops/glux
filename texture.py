@@ -308,6 +308,19 @@ class Animation():
     def unpause(self):
         self.paused = False;
 
+    @property
+    def alpha(self):
+
+        return self._alpha;
+
+    @alpha.setter
+    def alpha(self,value):
+
+        for frame in self.frames:
+            frame.alpha = value;
+
+        self._alpha = value;
+
 class Layer():
 
     def __init__(self,window):
